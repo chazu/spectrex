@@ -73,6 +73,7 @@ func (doc *TextDocument) AddSection(title, content string) *TextSection {
 }
 
 // Layout calculates the layout for all sections in the document.
+// Uses Y-up coordinate system: higher Y values appear higher on screen.
 func (doc *TextDocument) Layout() {
 	if doc.Screen == nil || len(doc.Sections) == 0 {
 		return
@@ -87,7 +88,8 @@ func (doc *TextDocument) Layout() {
 	columnWidth := contentWidth / float32(columnCount)
 
 	currentColumn := 0
-	currentY := doc.Padding
+	// Start from top of screen (high Y) and work down
+	currentY := doc.Screen.Height - doc.Padding
 
 	for _, section := range doc.Sections {
 		contentLinesCount := len(strings.Split(section.Content, "\n"))
@@ -116,9 +118,10 @@ func (doc *TextDocument) Layout() {
 				section.Style.Scale * section.Style.LineSpacing
 		}
 
-		if currentY+sectionHeight > doc.Screen.Height-doc.Padding {
+		// Check if we need to move to next column (Y going below padding)
+		if currentY-sectionHeight < doc.Padding {
 			currentColumn++
-			currentY = doc.Padding
+			currentY = doc.Screen.Height - doc.Padding
 
 			if currentColumn >= columnCount {
 				currentColumn = columnCount - 1
@@ -126,7 +129,8 @@ func (doc *TextDocument) Layout() {
 		}
 
 		x := doc.Padding + float32(currentColumn)*columnWidth
-		y := currentY
+		// Region Y is at bottom of section, height extends upward
+		y := currentY - sectionHeight
 
 		region := doc.Screen.AddRegion(x, y, columnWidth, sectionHeight)
 
@@ -139,10 +143,11 @@ func (doc *TextDocument) Layout() {
 
 		section.Region = region
 
+		// Move down for next section (decrease Y)
 		if doc.PageStyle.Font != nil {
-			currentY += sectionHeight + float32(doc.PageStyle.Font.Height)*section.Style.Scale
+			currentY -= sectionHeight + float32(doc.PageStyle.Font.Height)*section.Style.Scale
 		} else {
-			currentY += sectionHeight + 20 // Default spacing
+			currentY -= sectionHeight + 20 // Default spacing
 		}
 	}
 }

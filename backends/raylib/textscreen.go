@@ -69,7 +69,8 @@ func (tsr *TextScreenRenderer) DrawTextRegion(region *core.TextRegion, screenTra
 	lineHeight := float32(region.Font.Height) * effectiveScale
 
 	for i, line := range lines {
-		yPos := startY + float32(i)*lineHeight*region.LineSpacing
+		// Subtract Y because in 3D space Y increases upward, but text flows downward
+		yPos := startY - float32(i)*lineHeight*region.LineSpacing
 
 		if yPos < region.Y || yPos > region.Y+region.Height {
 			continue
@@ -87,22 +88,25 @@ func (tsr *TextScreenRenderer) DrawTextRegion(region *core.TextRegion, screenTra
 		}
 
 		// Calculate X position based on alignment
+		// Note: 180° Y rotation flips X axis, so local right → world left
+		lineWidth := region.CalculateLineWidth(line, effectiveScale)
 		var xPos float32
 		switch region.HAlign {
 		case core.AlignLeft:
-			xPos = region.X
+			// Start from local right edge (becomes world left after transform)
+			xPos = region.X + region.Width
 		case core.AlignCenter:
-			lineWidth := region.CalculateLineWidth(line, effectiveScale)
-			xPos = region.X + (region.Width-lineWidth)/2
+			// Center the text
+			xPos = region.X + (region.Width+lineWidth)/2
 		case core.AlignRight:
-			lineWidth := region.CalculateLineWidth(line, effectiveScale)
-			xPos = region.X + region.Width - lineWidth
+			// End at local left edge (becomes world right after transform)
+			xPos = region.X + lineWidth
 		case core.AlignJustified:
 			if i < len(lines)-1 && strings.Contains(line, " ") {
-				tsr.drawJustifiedLine(region, line, region.X, yPos, effectiveScale, screenTransform)
+				tsr.drawJustifiedLine(region, line, region.X+region.Width, yPos, effectiveScale, screenTransform)
 				continue
 			}
-			xPos = region.X
+			xPos = region.X + region.Width
 		}
 
 		pos := rl.Vector3{X: xPos, Y: yPos, Z: 0}
@@ -192,6 +196,7 @@ func (tsr *TextScreenRenderer) drawLine(region *core.TextRegion, line string, po
 	xOffset := float32(0)
 	runes := []rune(line)
 
+	// Iterate backwards through characters to compensate for 180° Y rotation mirror effect
 	for i := len(runes) - 1; i >= 0; i-- {
 		char := runes[i]
 
@@ -266,19 +271,21 @@ func (tsr *TextScreenRenderer) drawJustifiedLine(region *core.TextRegion, line s
 	}
 
 	extraSpacePerGap := (region.Width - totalWordsWidth) / float32(len(words)-1)
-	xPos := x + region.Width
+	// Start from local right edge (x is already region.X + region.Width from caller)
+	// and work leftward, placing words from last to first
+	xPos := x - region.Width
 
 	for i := len(words) - 1; i >= 0; i-- {
 		word := words[i]
 		wordWidth := region.CalculateLineWidth(word, scale)
-		wordPos := xPos - wordWidth
+		wordPos := xPos + wordWidth
 
 		pos := rl.Vector3Transform(rl.Vector3{X: wordPos, Y: y, Z: 0}, transform)
 		tsr.drawLine(region, word, pos, scale)
 
-		xPos = wordPos
+		xPos += wordWidth
 		if i > 0 {
-			xPos -= extraSpacePerGap
+			xPos += extraSpacePerGap
 		}
 	}
 }
@@ -298,10 +305,12 @@ func (tsr *TextScreenRenderer) drawSection(section *core.TextSection) {
 		titleLines := float32(len(strings.Split(section.Title, "\n")))
 		titleHeight := titleLines * float32(titleFont.Height) *
 			section.TitleStyle.Scale * section.TitleStyle.LineSpacing
+		titleGap := float32(titleFont.Height) * section.Style.Scale * 0.5
 
+		// Title region at top of section (higher Y in 3D space)
 		titleRegion := &core.TextRegion{
 			X:           region.X,
-			Y:           region.Y,
+			Y:           region.Y + region.Height - titleHeight,
 			Width:       region.Width,
 			Height:      titleHeight,
 			Text:        section.Title,
@@ -318,11 +327,12 @@ func (tsr *TextScreenRenderer) drawSection(section *core.TextSection) {
 
 		tsr.DrawTextRegion(titleRegion, screenTransform, region.Parent.Scale)
 
+		// Content region below title (lower Y in 3D space)
 		contentRegion := &core.TextRegion{
 			X:           region.X,
-			Y:           region.Y + titleHeight + float32(titleFont.Height)*section.Style.Scale*0.5,
+			Y:           region.Y,
 			Width:       region.Width,
-			Height:      region.Height - titleHeight - float32(titleFont.Height)*section.Style.Scale*0.5,
+			Height:      region.Height - titleHeight - titleGap,
 			Text:        section.Content,
 			Font:        contentFont,
 			Color:       section.Style.Color,

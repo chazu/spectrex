@@ -337,15 +337,27 @@ func (tr *TextRegion) CalculateTextHeight(lines []string) float32 {
 }
 
 // CalculateStartY calculates the starting Y position based on vertical alignment.
+// Note: In 3D space Y increases upward, so "top" of region is at tr.Y + tr.Height.
+// Text lines are rendered with decreasing Y (flowing downward on screen).
 func (tr *TextRegion) CalculateStartY(totalTextHeight float32) float32 {
+	// Small offset to prevent text from touching the top edge
+	topPadding := float32(0)
+	if tr.Font != nil && tr.Parent != nil {
+		effectiveScale := tr.Scale * tr.Parent.Scale
+		topPadding = float32(tr.Font.Height) * effectiveScale * 0.1
+	}
+
 	switch tr.VAlign {
 	case AlignTop:
-		return tr.Y
+		// Start at top of region (highest Y in world space) with small padding
+		return tr.Y + tr.Height - topPadding
 	case AlignMiddle:
-		return tr.Y + (tr.Height-totalTextHeight)/2
+		// Center vertically
+		return tr.Y + tr.Height - (tr.Height-totalTextHeight)/2
 	case AlignBottom:
-		return tr.Y + tr.Height - totalTextHeight
+		// Start so last line ends at bottom of region
+		return tr.Y + totalTextHeight
 	default:
-		return tr.Y
+		return tr.Y + tr.Height - topPadding
 	}
 }
