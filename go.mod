@@ -1,6 +1,6 @@
 module github.com/chazu/spectrex
 
-go 1.21
+go 1.25
 
 require (
 	github.com/chazu/hershey-go v0.0.0-20250305234640-4ebc358625e6
