@@ -15,23 +15,38 @@ const loremIpsum = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed
 const loremShort = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.`
 
 func main() {
-	screenWidth := int32(1280)
-	screenHeight := int32(720)
+	// Configure display settings
+	config := core.DisplayConfig{
+		WindowWidth:  1280,
+		WindowHeight: 720,
+		Title:        "Spectrex Layout Demo",
+		Maximized:    false, // Set to true to start maximized
+		Resizable:    true,
+		VSync:        true,
+		TargetFPS:    60,
+		RenderWidth:  1280, // Render resolution (0 = use window size)
+		RenderHeight: 720,
+		DefaultFOV:   45.0,
+	}
 
-	rl.InitWindow(screenWidth, screenHeight, "Spectrex Layout Demo")
+	// Create renderer with config (this also creates the window)
+	renderer := raylib.NewRendererWithConfig(config)
 	defer rl.CloseWindow()
+	defer renderer.Close()
 
-	rl.SetTargetFPS(60)
-
-	renderer := raylib.NewRenderer(screenWidth, screenHeight)
 	textScreenRenderer := raylib.NewTextScreenRenderer()
 
 	font := core.LoadHersheyFontData()
 
+	// Calculate visible Y range based on camera setup
+	// Camera at Y=50, FOV=45°, distance to Z=200 plane = 600 units
+	// Visible half-height ≈ tan(22.5°) * 600 ≈ 248
+	// So visible Y range is roughly 50-248 to 50+248 = -198 to 298
+	// Position screens within this range with some margin
+
 	// Top-left text screen (simple text, no background)
-	// In 3D: higher Y = higher on screen, lower X = left side
 	topLeftScreen := core.NewTextScreen(
-		core.Vec3{X: -50, Y: 50, Z: 200},
+		core.Vec3{X: -170, Y: 170, Z: 200}, // Y=170, top at Y=290 (within 298)
 		250, 120, 1.0,
 	)
 	topLeftScreen.SetDebug(false)
@@ -43,7 +58,7 @@ func main() {
 
 	// Bottom-right transparent text screen (with visible border)
 	bottomRightScreen := core.NewTextScreen(
-		core.Vec3{X: 280, Y: -120, Z: 200},
+		core.Vec3{X: 420, Y: -120, Z: 200}, // Bottom at Y=-120, well within range
 		280, 150, 1.0,
 	)
 	bottomRightScreen.SetTransparency(true)
@@ -56,7 +71,7 @@ func main() {
 
 	// Top-right opaque text screen (with dark background)
 	topRightScreen := core.NewTextScreen(
-		core.Vec3{X: 280, Y: 50, Z: 200},
+		core.Vec3{X: 420, Y: 170, Z: 200}, // Y=170, top at Y=290 (within 298)
 		280, 120, 1.0,
 	)
 	topRightScreen.SetTransparency(false)
@@ -78,7 +93,7 @@ func main() {
 		Position:   core.Vec3{X: 0, Y: 50, Z: -400},
 		Target:     core.Vec3{X: 0, Y: 50, Z: 100},
 		Up:         core.Vec3{X: 0, Y: 1, Z: 0},
-		Fovy:       45.0,
+		Fovy:       config.DefaultFOV,
 		Projection: 0,
 	}
 
@@ -101,7 +116,7 @@ func main() {
 		textScreenRenderer.DrawTextScreen(topRightScreen)
 
 		// Draw spinning hexagons in center
-		centerPos := core.Vec3{X: -50, Y: 50, Z: 200}
+		centerPos := core.Vec3{X: 0, Y: 50, Z: 200}
 
 		// Hexagon 1: spinning on Y axis
 		rot1 := core.Vec3{X: 0, Y: totalTime * 60, Z: 0}
@@ -122,6 +137,10 @@ func main() {
 		renderer.DrawGrid(10, 10.0)
 		renderer.End3D()
 
+		// Blit render texture to screen (if using render texture)
+		renderer.End3DAndBlit()
+
+		// Draw 2D UI overlays (these go directly to the screen)
 		renderer.DrawFPS(10, 10)
 		renderer.DrawText2D("Layout Demo - Press ESC to exit", 10, 40, 20, core.ColorWhite)
 
